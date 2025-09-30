@@ -1,3 +1,4 @@
+import re
 import vapoursynth as vs
 import awsmfunc as awf
 import math
@@ -455,6 +456,33 @@ def _deduce_src_csp_from_props(props: "vs.VideoFrameProps") -> Optional[int]:
     return None
 
 
+def _extract_unsupported_tonemap_kwargs(message: str) -> set[str]:
+    unsupported: set[str] = set()
+
+    for marker in UNSUPPORTED_TONEMAP_MARKERS:
+        if marker not in message:
+            continue
+
+        suffix = message.split(marker, 1)[1]
+        suffix = suffix.strip()
+
+        if "." in suffix:
+            suffix = suffix.split(".", 1)[0]
+
+        parts = re.split(r"[,\s]+", suffix)
+
+        for part in parts:
+            cleaned = part.strip("'\"")
+
+            if cleaned:
+                unsupported.add(cleaned)
+
+        if unsupported:
+            break
+
+    return unsupported
+
+
 def _apply_tonemap_props(clip: vs.VideoNode) -> vs.VideoNode:
     settings = _TONEMAP_SETTINGS
     tonemap_prop = (
@@ -506,13 +534,38 @@ def _tonemap_with_retries(
     attempts.append(forced_pq)
 
     last_exc: Optional[Exception] = None
+    removed_kwargs: set[str] = set()
+    index = 0
 
-    for index, kwargs in enumerate(attempts, start=1):
+    while index < len(attempts):
+        kwargs = attempts[index]
+
         try:
             tonemapped = tonemap(clip, **kwargs)
         except vs.Error as exc:
             last_exc = exc
-            print(f"[Tonemap attempt {index} failed] {exc}")
+            print(f"[Tonemap attempt {index + 1} failed] {exc}")
+
+            message = str(exc)
+            unsupported = _extract_unsupported_tonemap_kwargs(message)
+            new_kwargs = {name for name in unsupported if name not in removed_kwargs}
+
+            if new_kwargs:
+                for name in sorted(new_kwargs):
+                    for attempt_kwargs in attempts:
+                        if name in attempt_kwargs:
+                            attempt_kwargs.pop(name, None)
+                    removed_kwargs.add(name)
+
+                names_display = ", ".join(sorted(new_kwargs))
+                print(
+                    "[Tonemap compatibility] Retrying without unsupported argument(s): "
+                    f"{names_display}."
+                )
+                index = 0
+                continue
+
+            index += 1
             continue
         else:
             return _apply_tonemap_props(tonemapped)
