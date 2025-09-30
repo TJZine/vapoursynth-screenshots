@@ -4,6 +4,8 @@ import math
 from pathlib import Path
 from typing import Literal
 
+from .compat import ensure_placebo_tonemap_compat
+
 core = vs.core
 
 # Type hints
@@ -205,9 +207,33 @@ def prepare_clips(clips: list[vs.VideoNode],
     # Crop clips
     clips = [crop_file(c, width=crop_dimensions[0], height=crop_dimensions[1]) for c in clips]
 
-    # Tonemap if source uses 2020ncl matrix coefficients
-    if clips[0].get_frame(0).props["_Matrix"] == 9:
-        clips = [awf.DynamicTonemap(clip=c) for c in clips]
+    # Tonemap if source uses BT.2020 non-constant luminance matrix coefficients
+    props = clips[0].get_frame(0).props
+
+    matrix = None
+    if hasattr(props, "get"):
+        matrix = props.get("_Matrix")
+    elif "_Matrix" in props:
+        matrix = props["_Matrix"]
+
+    if matrix == 9:
+        ensure_placebo_tonemap_compat()
+
+        tonemapped_clips: list[vs.VideoNode] = []
+        for clip in clips:
+            try:
+                tonemapped_clips.append(awf.DynamicTonemap(clip=clip))
+            except vs.Error as exc:
+                # Older vs-placebo builds may still refuse certain keywords even
+                # after patching. Fall back to the pure Python implementation
+                # provided by awsmfunc so comparisons can continue.
+                print(
+                    "DynamicTonemap using vs-placebo failed ("  # pragma: no cover - requires plugin
+                    f"{exc}). Falling back to awsmfunc's non-libplacebo path."
+                )
+                tonemapped_clips.append(awf.DynamicTonemap(clip=clip, libplacebo=False))
+
+        clips = tonemapped_clips
 
     # Zip together clips and titles if present
     if clip_titles:

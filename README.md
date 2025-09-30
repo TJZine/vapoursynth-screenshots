@@ -45,11 +45,11 @@ For installing dependencies on Windows, I *highly* recommend using the [VSRepo G
 
 ### Python
 
-At the time of writing, VapourSynth R61's API is only compatible with Python [Python 3.10](https://www.python.org/downloads/release/python-31010/). 3.11 might work, I haven't tried.
+The scripts have been tested against Python 3.13 alongside VapourSynth R72. Older VapourSynth releases still require a Python version that matches their respective installers, so ensure your Python runtime aligns with the VapourSynth build you are using.
 
 ### VapourSynth
 
-Download the [VapourSynth](https://github.com/vapoursynth/vapoursynth/releases) installer and run it. Make sure you follow the instructions regarding the type of Python installation you have. I recommend doing a full install as I've had far less issues with it vs. the portable install.
+Download the [VapourSynth](https://github.com/vapoursynth/vapoursynth/releases) installer and run it. Make sure you follow the instructions regarding the type of Python installation you have. I recommend doing a full install as I've had far less issues with it vs. the portable install. VapourSynth R72 or newer is recommended to pair with the Python 3.13 updates mentioned above.
 
 ### Python Packages
 
@@ -227,9 +227,7 @@ This is most likely a Python path issue. To solve, set (or append to) the enviro
 
 ### Error `Tonemap: Function does not take argument(s) named tone_mapping_function_s`
 
-This is due to an incompatibility between `vs-placebo` and `awsmfunc`. If you're running into this, use `awsmfunc` version 1.3.3 as 1.3.4 (currently the latest) requires a custom compiled version of the `libvs_placebo` plugin.
-
-Linux users should be ok as I compiled the plugin recently. I plan to compile it manually for Windows and add it under `/bin` in the project sometime soon.
+Earlier versions of this project required downgrading `awsmfunc` when paired with older `vs-placebo` builds. The scripts now ship with a compatibility shim that automatically removes unsupported keyword arguments before delegating to `core.placebo.Tonemap`. If you still encounter the error after updating, ensure the bundled `modules/compat.py` file is present and that you are running the updated scripts. In the worst case you can pass `--no_frame_info` to skip tonemapping entirely or install a newer `vs-placebo` build via VSRepo.
 
 ## Acknowledgements
 
