@@ -4,7 +4,10 @@ import math
 from pathlib import Path
 from typing import Literal
 
-from .compat import ensure_placebo_tonemap_compat
+from .compat import (
+    UNSUPPORTED_TONEMAP_MARKERS,
+    ensure_placebo_tonemap_compat,
+)
 
 core = vs.core
 
@@ -288,6 +291,8 @@ def get_dimensions(resolution: str | int, clip: vs.VideoNode = None) -> list[int
 
 def _ensure_placebo_tonemap_support() -> None:
     """Validate that a modern vs-placebo Tonemap implementation is available."""
+
+    ensure_placebo_tonemap_compat()
 
     placebo = getattr(core, "placebo", None)
     tonemap = getattr(placebo, "Tonemap", None) if placebo else None

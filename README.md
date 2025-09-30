@@ -98,7 +98,7 @@ You can also take screenshots in the preview window using keybindings, although 
 
 > NOTE: Tonemapping has changed significantly since the last release of this project
 
-For any HDR/DoVi/HDR10+ sources, the script automatically tonemaps the screenshots for you using the `DynamicTonemap` function from `awsmfunc`. I think this tonemaps screenshots better than the older tonemap plugin, which was used previously.  The helper now requires a recent `vs-placebo` release (one of the libplacebo 6.x builds currently distributed through VSRepo) so that the `gamut_mode`, `tone_mapping_mode`, and `tone_mapping_crosstalk` parameters exposed by modern `awsmfunc` builds are honoured.  When an outdated plugin is detected the scripts abort with a descriptive error instead of silently falling back to degraded defaults—upgrade `vs-placebo` through VSRepo or the upstream releases to resolve it.
+For any HDR/DoVi/HDR10+ sources, the script automatically tonemaps the screenshots for you using the `DynamicTonemap` function from `awsmfunc`. I think this tonemaps screenshots better than the older tonemap plugin, which was used previously.  The helper still prefers a recent `vs-placebo` release (one of the libplacebo 6.x builds currently distributed through VSRepo) so that the `gamut_mode`, `tone_mapping_mode`, and `tone_mapping_crosstalk` parameters exposed by modern `awsmfunc` builds are honoured.  If an older plugin is detected the scripts now shim the call, warn about the missing controls, and fall back to libplacebo's defaults instead of aborting outright.  Upgrading `vs-placebo` remains recommended when you rely on those specific tuning knobs, but the workflow continues to function on legacy builds.
 
 For properly tonemapping DoVi, additional plugins are required. See [Dependencies](#dependencies) for more information.
 
@@ -227,7 +227,7 @@ This is most likely a Python path issue. To solve, set (or append to) the enviro
 
 ### Error `Tonemap: Function does not take argument(s) named tone_mapping_function_s`
 
-This error indicates that your `vs-placebo` plugin predates the libplacebo 6.x builds that expose the `tone_mapping_function_s`/`tone_mapping_mode` parameters consumed by current `awsmfunc` releases. Install an up-to-date `vs-placebo` through VSRepo or from the upstream GitHub releases and rerun the script. As a temporary workaround you can pass `--no_frame_info` to skip tonemapping, but the recommended fix is to upgrade the plugin.
+The helpers now intercept this error and retry without the unsupported parameters, so you should only see it if your `vs-placebo` build is missing `Tonemap` entirely or is otherwise badly outdated. Reinstall the plugin through VSRepo/upstream releases and rerun the script. As a temporary workaround you can pass `--no_frame_info` to skip tonemapping, but upgrading the plugin is the best fix so you regain the modern tuning options.
 
 ## Acknowledgements
 
