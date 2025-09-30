@@ -21,11 +21,11 @@ overwriting if the new ones are saved to an existing directory.
 
 Generate screenshots for test encodes with an offset of 2000 frames::
 
-    python screenshots.py 'C:\Path\src.mkv' --encodes 'C:\Path\t1.mkv' 'C:\Path\t2.mkv' --offset 2000
+    python screenshots.py 'C:\\Path\\src.mkv' --encodes 'C:\\Path\\t1.mkv' 'C:\\Path\\t2.mkv' --offset 2000
 
 Generate 25 random screenshotS ranging from frame 100-25000::
 
-    python screenshots.py 'C:\Path\src.mkv' --encodes 'C:\Path\t1.mkv' --random_frames 100 25000 25
+    python screenshots.py 'C:\\Path\\src.mkv' --encodes 'C:\\Path\\t1.mkv' --random_frames 100 25000 25
 
 Specify an input directory containing encode files::
 
