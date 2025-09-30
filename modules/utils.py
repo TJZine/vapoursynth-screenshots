@@ -316,7 +316,7 @@ def _tonemap_with_placebo(clip: vs.VideoNode) -> vs.VideoNode:
     except vs.Error as exc:  # pragma: no cover - depends on plugin runtime
         message = str(exc)
 
-        if any(marker in message for marker in _UNSUPPORTED_TONEMAP_MARKERS):
+        if any(marker in message for marker in UNSUPPORTED_TONEMAP_MARKERS):
             raise RuntimeError(
                 "The installed vs-placebo build does not recognise the "
                 "gamut_mode, tone_mapping_mode or tone_mapping_crosstalk "
