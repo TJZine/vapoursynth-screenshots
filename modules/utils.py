@@ -6,6 +6,11 @@ from typing import Literal
 
 core = vs.core
 
+_UNSUPPORTED_TONEMAP_MARKERS = (
+    "does not take argument(s) named",
+    "does not take argument named",
+)
+
 # Type hints
 LOAD = Literal['ffm2', 'lsmas']
 RESIZE = Literal['720p', '1080p', '1440p', '2160p']
@@ -205,9 +210,23 @@ def prepare_clips(clips: list[vs.VideoNode],
     # Crop clips
     clips = [crop_file(c, width=crop_dimensions[0], height=crop_dimensions[1]) for c in clips]
 
-    # Tonemap if source uses 2020ncl matrix coefficients
-    if clips[0].get_frame(0).props["_Matrix"] == 9:
-        clips = [awf.DynamicTonemap(clip=c) for c in clips]
+    # Tonemap if source uses BT.2020 non-constant luminance matrix coefficients
+    props = clips[0].get_frame(0).props
+
+    matrix = None
+    if hasattr(props, "get"):
+        matrix = props.get("_Matrix")
+    elif "_Matrix" in props:
+        matrix = props["_Matrix"]
+
+    if matrix == 9:
+        _ensure_placebo_tonemap_support()
+
+        tonemapped_clips: list[vs.VideoNode] = []
+        for clip in clips:
+            tonemapped_clips.append(_tonemap_with_placebo(clip))
+
+        clips = tonemapped_clips
 
     # Zip together clips and titles if present
     if clip_titles:
@@ -263,4 +282,43 @@ def get_dimensions(resolution: str | int, clip: vs.VideoNode = None) -> list[int
         dimensions = [resized.width, resized.height]
 
     return dimensions
+
+
+def _ensure_placebo_tonemap_support() -> None:
+    """Validate that a modern vs-placebo Tonemap implementation is available."""
+
+    placebo = getattr(core, "placebo", None)
+    tonemap = getattr(placebo, "Tonemap", None) if placebo else None
+
+    if tonemap is None:
+        raise RuntimeError(
+            "HDR content detected (_Matrix=9) but the vs-placebo plugin is not "
+            "available. Install a recent vs-placebo build to enable libplacebo "
+            "tonemapping."
+        )
+
+
+def _tonemap_with_placebo(clip: vs.VideoNode) -> vs.VideoNode:
+    """Tonemap a clip, surfacing actionable guidance for outdated plugins."""
+
+    try:
+        return awf.DynamicTonemap(clip=clip)
+    except vs.Error as exc:  # pragma: no cover - depends on plugin runtime
+        message = str(exc)
+
+        if any(marker in message for marker in _UNSUPPORTED_TONEMAP_MARKERS):
+            raise RuntimeError(
+                "The installed vs-placebo build does not recognise the "
+                "gamut_mode, tone_mapping_mode or tone_mapping_crosstalk "
+                "parameters required by awsmfunc.DynamicTonemap. Update "
+                "vs-placebo to one of the current libplacebo 6.x releases "
+                "distributed via VSRepo or the upstream project and try "
+                "again."
+            ) from exc
+
+        print(
+            "DynamicTonemap using vs-placebo failed ("
+            f"{exc}). Falling back to awsmfunc's non-libplacebo path."
+        )
+        return awf.DynamicTonemap(clip=clip, libplacebo=False)
 

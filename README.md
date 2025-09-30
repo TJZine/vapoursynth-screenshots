@@ -45,11 +45,11 @@ For installing dependencies on Windows, I *highly* recommend using the [VSRepo G
 
 ### Python
 
-At the time of writing, VapourSynth R61's API is only compatible with Python [Python 3.10](https://www.python.org/downloads/release/python-31010/). 3.11 might work, I haven't tried.
+The scripts have been tested against Python 3.13 alongside VapourSynth R72. Older VapourSynth releases still require a Python version that matches their respective installers, so ensure your Python runtime aligns with the VapourSynth build you are using.
 
 ### VapourSynth
 
-Download the [VapourSynth](https://github.com/vapoursynth/vapoursynth/releases) installer and run it. Make sure you follow the instructions regarding the type of Python installation you have. I recommend doing a full install as I've had far less issues with it vs. the portable install.
+Download the [VapourSynth](https://github.com/vapoursynth/vapoursynth/releases) installer and run it. Make sure you follow the instructions regarding the type of Python installation you have. I recommend doing a full install as I've had far less issues with it vs. the portable install. VapourSynth R72 or newer is recommended to pair with the Python 3.13 updates mentioned above.
 
 ### Python Packages
 
@@ -98,7 +98,7 @@ You can also take screenshots in the preview window using keybindings, although 
 
 > NOTE: Tonemapping has changed significantly since the last release of this project
 
-For any HDR/DoVi/HDR10+ sources, the script automatically tonemaps the screenshots for you using the `DynamicTonemap` function from `awsmfunc`. I think this tonemaps screenshots better than the older tonemap plugin, which was used previously.
+For any HDR/DoVi/HDR10+ sources, the script automatically tonemaps the screenshots for you using the `DynamicTonemap` function from `awsmfunc`. I think this tonemaps screenshots better than the older tonemap plugin, which was used previously.  The helper now requires a recent `vs-placebo` release (one of the libplacebo 6.x builds currently distributed through VSRepo) so that the `gamut_mode`, `tone_mapping_mode`, and `tone_mapping_crosstalk` parameters exposed by modern `awsmfunc` builds are honoured.  When an outdated plugin is detected the scripts abort with a descriptive error instead of silently falling back to degraded defaults—upgrade `vs-placebo` through VSRepo or the upstream releases to resolve it.
 
 For properly tonemapping DoVi, additional plugins are required. See [Dependencies](#dependencies) for more information.
 
@@ -227,9 +227,7 @@ This is most likely a Python path issue. To solve, set (or append to) the enviro
 
 ### Error `Tonemap: Function does not take argument(s) named tone_mapping_function_s`
 
-This is due to an incompatibility between `vs-placebo` and `awsmfunc`. If you're running into this, use `awsmfunc` version 1.3.3 as 1.3.4 (currently the latest) requires a custom compiled version of the `libvs_placebo` plugin.
-
-Linux users should be ok as I compiled the plugin recently. I plan to compile it manually for Windows and add it under `/bin` in the project sometime soon.
+This error indicates that your `vs-placebo` plugin predates the libplacebo 6.x builds that expose the `tone_mapping_function_s`/`tone_mapping_mode` parameters consumed by current `awsmfunc` releases. Install an up-to-date `vs-placebo` through VSRepo or from the upstream GitHub releases and rerun the script. As a temporary workaround you can pass `--no_frame_info` to skip tonemapping, but the recommended fix is to upgrade the plugin.
 
 ## Acknowledgements
 
