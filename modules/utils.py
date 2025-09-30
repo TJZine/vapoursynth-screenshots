@@ -11,6 +11,11 @@ from .compat import (
 
 core = vs.core
 
+_UNSUPPORTED_TONEMAP_MARKERS = (
+    "does not take argument(s) named",
+    "does not take argument named",
+)
+
 # Type hints
 LOAD = Literal['ffm2', 'lsmas']
 RESIZE = Literal['720p', '1080p', '1440p', '2160p']
