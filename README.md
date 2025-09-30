@@ -94,6 +94,15 @@ If you wish to compare test encode(s) vs. the source, specify the frame range us
 
 You can also take screenshots in the preview window using keybindings, although they will be missing some features included with the `screenshots.py` module.
 
+#### Keyboard and mouse controls
+
+The preview window exposes a large set of hotkeys inherited from the upstream `view` module. The highlights below cover the controls most users rely on day-to-day:
+
+- **Switching clips & playback**: Press the number keys `1`–`9`/`0` to select a loaded clip. Use `,` and `.` (or `<` and `>`) for single-frame stepping, `Home`/`End` to jump to the first or last frame, and the spacebar to toggle play/pause. `Q` closes the preview (or resets the current zoom/crop if one is active).【F:modules/vs_preview/view.py†L201-L220】【F:modules/vs_preview/view.py†L229-L235】
+- **Zooming & cropping**: Double-click with the left mouse button or press `Z` to zoom 2× around the cursor. Click and drag to draw a crop rectangle, then confirm with `Enter`, a double-click inside the selection, or the right mouse button. `Esc` returns to the previous zoom/crop and `R` resets to the full frame. While adjusting a crop you can nudge the selected edge or the entire region with `Y`, `N`, `G`, and `J` (up/down/left/right).【F:modules/vs_preview/view.py†L205-L244】
+- **Inspecting frames**: Press `I` to print RGB/YUV values for the pixel under the cursor and `P` to dump all available VapourSynth frame properties for the current frame.【F:modules/vs_preview/view.py†L221-L226】
+- **Saving images & UI toggles**: `W` saves a full-resolution PNG of the current frame, while `E` writes exactly what is on screen (respecting zoom). Toggle the seek slider with `S`, switch fullscreen with `F`, and press `H` at any time to print the full hotkey list in the terminal.【F:modules/vs_preview/view.py†L227-L235】
+
 ### Tonemapping
 
 > NOTE: Tonemapping has changed significantly since the last release of this project
