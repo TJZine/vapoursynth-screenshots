@@ -6,10 +6,25 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Optional
 
-from .compat import (
-    ensure_frameinfo_compat,
-    ensure_placebo_tonemap_compat,
-)
+try:
+    from .compat import (
+        UNSUPPORTED_TONEMAP_MARKERS,
+        ensure_frameinfo_compat,
+        ensure_placebo_tonemap_compat,
+    )
+except Exception:  # pragma: no cover - fallback for incomplete installs
+    UNSUPPORTED_TONEMAP_MARKERS = (
+        "does not take argument(s) named",
+        "does not take argument named",
+    )
+
+    def ensure_frameinfo_compat() -> None:
+        return None
+
+    def ensure_placebo_tonemap_compat() -> None:
+        return None
+
+ensure_placebo_tonemap_compat()
 
 ensure_frameinfo_compat()
 
