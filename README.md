@@ -45,11 +45,11 @@ For installing dependencies on Windows, I *highly* recommend using the [VSRepo G
 
 ### Python
 
-At the time of writing, VapourSynth R61's API is only compatible with Python [Python 3.10](https://www.python.org/downloads/release/python-31010/). 3.11 might work, I haven't tried.
+The scripts have been tested against Python 3.13 alongside VapourSynth R72. Older VapourSynth releases still require a Python version that matches their respective installers, so ensure your Python runtime aligns with the VapourSynth build you are using.
 
 ### VapourSynth
 
-Download the [VapourSynth](https://github.com/vapoursynth/vapoursynth/releases) installer and run it. Make sure you follow the instructions regarding the type of Python installation you have. I recommend doing a full install as I've had far less issues with it vs. the portable install.
+Download the [VapourSynth](https://github.com/vapoursynth/vapoursynth/releases) installer and run it. Make sure you follow the instructions regarding the type of Python installation you have. I recommend doing a full install as I've had far less issues with it vs. the portable install. VapourSynth R72 or newer is recommended to pair with the Python 3.13 updates mentioned above.
 
 ### Python Packages
 
@@ -94,11 +94,20 @@ If you wish to compare test encode(s) vs. the source, specify the frame range us
 
 You can also take screenshots in the preview window using keybindings, although they will be missing some features included with the `screenshots.py` module.
 
+#### Keyboard and mouse controls
+
+The preview window exposes a large set of hotkeys inherited from the upstream `view` module. The highlights below cover the controls most users rely on day-to-day:
+
+- **Switching clips & playback**: Press the number keys `1`–`9`/`0` to select a loaded clip. Use `,` and `.` (or `<` and `>`) for single-frame stepping, `Home`/`End` to jump to the first or last frame, and the spacebar to toggle play/pause. `Q` closes the preview (or resets the current zoom/crop if one is active).【F:modules/vs_preview/view.py†L201-L220】【F:modules/vs_preview/view.py†L229-L235】
+- **Zooming & cropping**: Double-click with the left mouse button or press `Z` to zoom 2× around the cursor. Click and drag to draw a crop rectangle, then confirm with `Enter`, a double-click inside the selection, or the right mouse button. `Esc` returns to the previous zoom/crop and `R` resets to the full frame. While adjusting a crop you can nudge the selected edge or the entire region with `Y`, `N`, `G`, and `J` (up/down/left/right).【F:modules/vs_preview/view.py†L205-L244】
+- **Inspecting frames**: Press `I` to print RGB/YUV values for the pixel under the cursor and `P` to dump all available VapourSynth frame properties for the current frame.【F:modules/vs_preview/view.py†L221-L226】
+- **Saving images & UI toggles**: `W` saves a full-resolution PNG of the current frame, while `E` writes exactly what is on screen (respecting zoom). Toggle the seek slider with `S`, switch fullscreen with `F`, and press `H` at any time to print the full hotkey list in the terminal.【F:modules/vs_preview/view.py†L227-L235】
+
 ### Tonemapping
 
 > NOTE: Tonemapping has changed significantly since the last release of this project
 
-For any HDR/DoVi/HDR10+ sources, the script automatically tonemaps the screenshots for you using the `DynamicTonemap` function from `awsmfunc`. I think this tonemaps screenshots better than the older tonemap plugin, which was used previously.
+For any HDR/DoVi/HDR10+ sources, the script automatically tonemaps the screenshots for you using the `DynamicTonemap` function from `awsmfunc`. I think this tonemaps screenshots better than the older tonemap plugin, which was used previously.  The helper still prefers a recent `vs-placebo` release (one of the libplacebo 6.x builds currently distributed through VSRepo) so that the `gamut_mode`, `tone_mapping_mode`, and `tone_mapping_crosstalk` parameters exposed by modern `awsmfunc` builds are honoured.  When an older plugin rejects those arguments the scripts now warn you and automatically fall back to awsmfunc's software tonemapping path.  Upgrading `vs-placebo` remains recommended when you rely on those specific tuning knobs or want GPU-accelerated libplacebo tonemapping, but the workflow continues to function on legacy builds.
 
 For properly tonemapping DoVi, additional plugins are required. See [Dependencies](#dependencies) for more information.
 
@@ -227,9 +236,7 @@ This is most likely a Python path issue. To solve, set (or append to) the enviro
 
 ### Error `Tonemap: Function does not take argument(s) named tone_mapping_function_s`
 
-This is due to an incompatibility between `vs-placebo` and `awsmfunc`. If you're running into this, use `awsmfunc` version 1.3.3 as 1.3.4 (currently the latest) requires a custom compiled version of the `libvs_placebo` plugin.
-
-Linux users should be ok as I compiled the plugin recently. I plan to compile it manually for Windows and add it under `/bin` in the project sometime soon.
+The helpers now intercept this error and automatically retry through awsmfunc's software tonemapping path when the installed `vs-placebo` build does not understand the newer keyword arguments. You'll still receive a warning pointing you toward VSRepo/upstream builds if you want libplacebo-powered tonemapping, but the clip continues to render. If the plugin is missing `Tonemap` entirely (or VapourSynth cannot find the module) the script will abort with a clearer message asking you to reinstall the plugin.
 
 ## Acknowledgements
 
