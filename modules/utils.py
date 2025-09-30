@@ -4,6 +4,8 @@ import math
 from pathlib import Path
 from typing import Literal
 
+from .compat import ensure_placebo_tonemap_compat
+
 core = vs.core
 
 _UNSUPPORTED_TONEMAP_MARKERS = (
