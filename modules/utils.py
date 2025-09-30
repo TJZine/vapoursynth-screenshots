@@ -1,8 +1,10 @@
+import re
 import vapoursynth as vs
 import awsmfunc as awf
 import math
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 from .compat import (
     UNSUPPORTED_TONEMAP_MARKERS,
@@ -14,10 +16,28 @@ ensure_frameinfo_compat()
 
 core = vs.core
 
-_UNSUPPORTED_TONEMAP_MARKERS = (
-    "does not take argument(s) named",
-    "does not take argument named",
-)
+_HDR_TRANSFERS = {16, 18}
+_BT2020_PRIMARIES = 9
+_TRANSFER_PQ = 16
+_TRANSFER_HLG = 18
+
+
+@dataclass(frozen=True)
+class _TonemapSettings:
+    """Default configuration for libplacebo tonemapping."""
+
+    func: str = "bt2390"
+    dst_max: float = 120.0
+    dst_min: float = 0.1
+    dpd: bool = True
+    gamut_mapping: int = 1
+    smoothing_period: int = 200
+    min_dynamic_peak: float = 1.0
+    scene_threshold_low: float = 1.8
+    scene_threshold_high: float = 5.0
+
+
+_TONEMAP_SETTINGS = _TonemapSettings()
 
 # Type hints
 LOAD = Literal['ffm2', 'lsmas']
@@ -218,23 +238,18 @@ def prepare_clips(clips: list[vs.VideoNode],
     # Crop clips
     clips = [crop_file(c, width=crop_dimensions[0], height=crop_dimensions[1]) for c in clips]
 
-    # Tonemap if source uses BT.2020 non-constant luminance matrix coefficients
-    props = clips[0].get_frame(0).props
+    props = _first_frame_props(clips[0])
 
-    matrix = None
-    if hasattr(props, "get"):
-        matrix = props.get("_Matrix")
-    elif "_Matrix" in props:
-        matrix = props["_Matrix"]
-
-    if matrix == 9:
+    if _is_hdr_clip(props):
         _ensure_placebo_tonemap_support()
 
         tonemapped_clips: list[vs.VideoNode] = []
         for clip in clips:
-            tonemapped_clips.append(_tonemap_with_placebo(clip))
+            tonemapped_clips.append(_process_hdr_clip(clip))
 
         clips = tonemapped_clips
+    else:
+        clips = [_convert_to_rgb24(clip) for clip in clips]
 
     # Zip together clips and titles if present
     if clip_titles:
@@ -302,34 +317,284 @@ def _ensure_placebo_tonemap_support() -> None:
 
     if tonemap is None:
         raise RuntimeError(
-            "HDR content detected (_Matrix=9) but the vs-placebo plugin is not "
-            "available. Install a recent vs-placebo build to enable libplacebo "
-            "tonemapping."
+            "HDR content detected but the vs-placebo plugin is not available. "
+            "Install a recent vs-placebo build to enable libplacebo tonemapping."
         )
 
 
-def _tonemap_with_placebo(clip: vs.VideoNode) -> vs.VideoNode:
-    """Tonemap a clip, surfacing actionable guidance for outdated plugins."""
+def _first_frame_props(clip: vs.VideoNode) -> "vs.VideoFrameProps":
+    return clip.get_frame(0).props
+
+
+def _read_prop(props: "vs.VideoFrameProps", key: str) -> Optional[int]:
+    value: Optional[int]
+    if hasattr(props, "get"):
+        value = props.get(key)  # type: ignore[assignment]
+    elif key in props:
+        value = props[key]
+    else:
+        value = None
+
+    if value is None:
+        return None
+
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            decoded = value.decode()
+        except Exception:
+            return None
+        try:
+            return int(decoded)
+        except ValueError:
+            return None
 
     try:
-        return awf.DynamicTonemap(clip=clip)
-    except vs.Error as exc:  # pragma: no cover - depends on plugin runtime
-        message = str(exc)
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
-        if any(marker in message for marker in UNSUPPORTED_TONEMAP_MARKERS):
-            print(
-                "vs-placebo Tonemap does not recognise the gamut_mode, "
-                "tone_mapping_mode or tone_mapping_crosstalk parameters "
-                "requested by awsmfunc.DynamicTonemap. Falling back to "
-                "awsmfunc's software tonemapping pipeline. Upgrade to a "
-                "libplacebo 6.x vs-placebo build to regain those advanced "
-                "controls."
-            )
-            return awf.DynamicTonemap(clip=clip, libplacebo=False)
 
-        print(
-            "DynamicTonemap using vs-placebo failed ("
-            f"{exc}). Falling back to awsmfunc's non-libplacebo path."
-        )
-        return awf.DynamicTonemap(clip=clip, libplacebo=False)
+def _is_hdr_clip(props: "vs.VideoFrameProps") -> bool:
+    transfer = _read_prop(props, "_Transfer")
+    primaries = _read_prop(props, "_Primaries")
 
+    return transfer in _HDR_TRANSFERS and primaries == _BT2020_PRIMARIES
+
+
+def _convert_to_rgb48(
+    clip: vs.VideoNode,
+    props: Optional["vs.VideoFrameProps"] = None,
+) -> vs.VideoNode:
+    if props is None:
+        props = _first_frame_props(clip)
+
+    if clip.format is not None and clip.format.color_family == vs.RGB and clip.format.bits_per_sample == 16:
+        return clip
+
+    resize_kwargs = {"format": vs.RGB48}
+
+    matrix = _read_prop(props, "_Matrix")
+    transfer = _read_prop(props, "_Transfer")
+    primaries = _read_prop(props, "_Primaries")
+    color_range = _read_prop(props, "_ColorRange")
+
+    if matrix is not None:
+        resize_kwargs["matrix_in"] = matrix
+    if transfer is not None:
+        resize_kwargs["transfer_in"] = transfer
+    if primaries is not None:
+        resize_kwargs["primaries_in"] = primaries
+    if color_range is not None:
+        resize_kwargs["range_in"] = color_range
+
+    return core.resize.Spline36(clip, **resize_kwargs)
+
+
+def _convert_to_rgb24(
+    clip: vs.VideoNode,
+    props: Optional["vs.VideoFrameProps"] = None,
+) -> vs.VideoNode:
+    if clip.format is not None and clip.format.color_family == vs.RGB and clip.format.bits_per_sample == 8:
+        return clip
+
+    if props is None:
+        props = _first_frame_props(clip)
+
+    resize_kwargs = {
+        "format": vs.RGB24,
+        "dither_type": "error_diffusion",
+    }
+
+    matrix = _read_prop(props, "_Matrix")
+    transfer = _read_prop(props, "_Transfer")
+    primaries = _read_prop(props, "_Primaries")
+    color_range = _read_prop(props, "_ColorRange")
+
+    if matrix is not None:
+        resize_kwargs["matrix_in"] = matrix
+    if transfer is not None:
+        resize_kwargs["transfer_in"] = transfer
+    if primaries is not None:
+        resize_kwargs["primaries_in"] = primaries
+    if color_range is not None:
+        resize_kwargs["range_in"] = color_range
+
+    return core.resize.Spline36(clip, **resize_kwargs)
+
+
+def _normalize_props_for_placebo_rgb16(
+    clip: vs.VideoNode,
+    props: "vs.VideoFrameProps",
+) -> vs.VideoNode:
+    kwargs = {
+        "_Matrix": 0,
+        "_ColorRange": 0,
+    }
+
+    transfer = _read_prop(props, "_Transfer")
+    primaries = _read_prop(props, "_Primaries")
+
+    if transfer is not None:
+        kwargs["_Transfer"] = transfer
+    if primaries is not None:
+        kwargs["_Primaries"] = primaries
+
+    return core.std.SetFrameProps(clip, **kwargs)
+
+
+def _deduce_src_csp_from_props(props: "vs.VideoFrameProps") -> Optional[int]:
+    transfer = _read_prop(props, "_Transfer")
+    primaries = _read_prop(props, "_Primaries")
+
+    if primaries != _BT2020_PRIMARIES:
+        return None
+
+    if transfer == _TRANSFER_PQ:
+        return 1
+    if transfer == _TRANSFER_HLG:
+        return 2
+
+    return None
+
+
+def _extract_unsupported_tonemap_kwargs(message: str) -> set[str]:
+    unsupported: set[str] = set()
+
+    for marker in UNSUPPORTED_TONEMAP_MARKERS:
+        if marker not in message:
+            continue
+
+        suffix = message.split(marker, 1)[1]
+        suffix = suffix.strip()
+
+        if "." in suffix:
+            suffix = suffix.split(".", 1)[0]
+
+        parts = re.split(r"[,\s]+", suffix)
+
+        for part in parts:
+            cleaned = part.strip("'\"")
+
+            if cleaned:
+                unsupported.add(cleaned)
+
+        if unsupported:
+            break
+
+    return unsupported
+
+
+def _apply_tonemap_props(clip: vs.VideoNode) -> vs.VideoNode:
+    settings = _TONEMAP_SETTINGS
+    tonemap_prop = (
+        f"placebo:{settings.func},dpd={str(settings.dpd).lower()},dst_max={settings.dst_max}"
+    )
+    clip = core.std.SetFrameProps(clip, _Tonemapped=tonemap_prop)
+    print(
+        "[libplacebo] HDR->SDR tonemap applied using function '",
+        f"{settings.func}' (dpd={settings.dpd}, dst_max={settings.dst_max}).",
+        sep="",
+    )
+    return clip
+
+
+def _tonemap_with_retries(
+    clip: vs.VideoNode,
+    src_csp_hint: Optional[int],
+) -> vs.VideoNode:
+    placebo = getattr(core, "placebo", None)
+    tonemap = getattr(placebo, "Tonemap", None) if placebo else None
+
+    if tonemap is None:
+        raise RuntimeError("vs-placebo Tonemap is not available")
+
+    settings = _TONEMAP_SETTINGS
+    base_kwargs = dict(
+        dst_csp=0,
+        dst_prim=1,
+        dst_max=settings.dst_max,
+        dst_min=settings.dst_min,
+        dynamic_peak_detection=settings.dpd,
+        gamut_mapping=settings.gamut_mapping,
+        tone_mapping_function_s=settings.func,
+        use_dovi=True,
+        smoothing_period=settings.smoothing_period,
+        min_dynamic_peak=settings.min_dynamic_peak,
+        scene_threshold_low=settings.scene_threshold_low,
+        scene_threshold_high=settings.scene_threshold_high,
+    )
+
+    attempts: list[dict] = []
+    if src_csp_hint is not None:
+        attempt_kwargs = base_kwargs.copy()
+        attempt_kwargs["src_csp"] = src_csp_hint
+        attempts.append(attempt_kwargs)
+    attempts.append(base_kwargs)
+    forced_pq = base_kwargs.copy()
+    forced_pq["src_csp"] = 1
+    attempts.append(forced_pq)
+
+    last_exc: Optional[Exception] = None
+    removed_kwargs: set[str] = set()
+    index = 0
+
+    while index < len(attempts):
+        kwargs = attempts[index]
+
+        try:
+            tonemapped = tonemap(clip, **kwargs)
+        except vs.Error as exc:
+            last_exc = exc
+            print(f"[Tonemap attempt {index + 1} failed] {exc}")
+
+            message = str(exc)
+            unsupported = _extract_unsupported_tonemap_kwargs(message)
+            new_kwargs = {name for name in unsupported if name not in removed_kwargs}
+
+            if new_kwargs:
+                for name in sorted(new_kwargs):
+                    for attempt_kwargs in attempts:
+                        if name in attempt_kwargs:
+                            attempt_kwargs.pop(name, None)
+                    removed_kwargs.add(name)
+
+                names_display = ", ".join(sorted(new_kwargs))
+                print(
+                    "[Tonemap compatibility] Retrying without unsupported argument(s): "
+                    f"{names_display}."
+                )
+                index = 0
+                continue
+
+            index += 1
+            continue
+        else:
+            return _apply_tonemap_props(tonemapped)
+
+    if last_exc is not None:
+        raise last_exc
+
+    raise RuntimeError("Unknown error during tonemap attempts")
+
+
+def _finalize_rgb24(clip: vs.VideoNode) -> vs.VideoNode:
+    return core.resize.Spline36(
+        clip,
+        format=vs.RGB24,
+        dither_type="error_diffusion",
+    )
+
+
+def _process_hdr_clip(clip: vs.VideoNode) -> vs.VideoNode:
+    props = _first_frame_props(clip)
+
+    try:
+        rgb16 = _convert_to_rgb48(clip, props)
+        normalized = _normalize_props_for_placebo_rgb16(rgb16, props)
+        src_csp_hint = _deduce_src_csp_from_props(props)
+        tonemapped = _tonemap_with_retries(normalized, src_csp_hint)
+    except Exception as exc:
+        print(f"[ERROR] Color processing failed ({exc}). Falling back to SDR conversion.")
+        return _convert_to_rgb24(clip, props)
+
+    return _finalize_rgb24(tonemapped)
