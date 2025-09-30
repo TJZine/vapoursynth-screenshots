@@ -10,7 +10,7 @@ Since view is not available via pip, I've added it to this repo for convenience.
 
 Example usage::
 
-    PS > python compare.py 'C:\path\source.mkv' --encodes 'C:\path\enc1.mkv', 'C:\path\enc2.mkv'
+    PS > python compare.py 'C:\\path\\source.mkv' --encodes 'C:\\path\\enc1.mkv', 'C:\\path\\enc2.mkv'
 
 You can also pass the script a folder containing files you want to compare::
 
