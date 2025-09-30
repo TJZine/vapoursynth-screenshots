@@ -6,8 +6,11 @@ from typing import Literal
 
 from .compat import (
     UNSUPPORTED_TONEMAP_MARKERS,
+    ensure_frameinfo_compat,
     ensure_placebo_tonemap_compat,
 )
+
+ensure_frameinfo_compat()
 
 core = vs.core
 
