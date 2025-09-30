@@ -107,7 +107,7 @@ The preview window exposes a large set of hotkeys inherited from the upstream `v
 
 > NOTE: Tonemapping has changed significantly since the last release of this project
 
-For any HDR/DoVi/HDR10+ sources, the script automatically tonemaps the screenshots for you using the `DynamicTonemap` function from `awsmfunc`. I think this tonemaps screenshots better than the older tonemap plugin, which was used previously.  The helper still prefers a recent `vs-placebo` release (one of the libplacebo 6.x builds currently distributed through VSRepo) so that the `gamut_mode`, `tone_mapping_mode`, and `tone_mapping_crosstalk` parameters exposed by modern `awsmfunc` builds are honoured.  If an older plugin is detected the scripts now shim the call, warn about the missing controls, and fall back to libplacebo's defaults instead of aborting outright.  Upgrading `vs-placebo` remains recommended when you rely on those specific tuning knobs, but the workflow continues to function on legacy builds.
+For any HDR/DoVi/HDR10+ sources, the script automatically tonemaps the screenshots for you using the `DynamicTonemap` function from `awsmfunc`. I think this tonemaps screenshots better than the older tonemap plugin, which was used previously.  The helper still prefers a recent `vs-placebo` release (one of the libplacebo 6.x builds currently distributed through VSRepo) so that the `gamut_mode`, `tone_mapping_mode`, and `tone_mapping_crosstalk` parameters exposed by modern `awsmfunc` builds are honoured.  When an older plugin rejects those arguments the scripts now warn you and automatically fall back to awsmfunc's software tonemapping path.  Upgrading `vs-placebo` remains recommended when you rely on those specific tuning knobs or want GPU-accelerated libplacebo tonemapping, but the workflow continues to function on legacy builds.
 
 For properly tonemapping DoVi, additional plugins are required. See [Dependencies](#dependencies) for more information.
 
@@ -236,7 +236,7 @@ This is most likely a Python path issue. To solve, set (or append to) the enviro
 
 ### Error `Tonemap: Function does not take argument(s) named tone_mapping_function_s`
 
-The helpers now intercept this error and retry without the unsupported parameters, so you should only see it if your `vs-placebo` build is missing `Tonemap` entirely or is otherwise badly outdated. Reinstall the plugin through VSRepo/upstream releases and rerun the script. As a temporary workaround you can pass `--no_frame_info` to skip tonemapping, but upgrading the plugin is the best fix so you regain the modern tuning options.
+The helpers now intercept this error and automatically retry through awsmfunc's software tonemapping path when the installed `vs-placebo` build does not understand the newer keyword arguments. You'll still receive a warning pointing you toward VSRepo/upstream builds if you want libplacebo-powered tonemapping, but the clip continues to render. If the plugin is missing `Tonemap` entirely (or VapourSynth cannot find the module) the script will abort with a clearer message asking you to reinstall the plugin.
 
 ## Acknowledgements
 

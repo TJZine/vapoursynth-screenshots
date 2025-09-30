@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial, wraps
-from typing import Iterable, Optional
+from typing import Optional
 
 try:  # pragma: no cover - optional dependency at runtime
     from awsmfunc.types.placebo import PlaceboTonemapOpts
@@ -28,62 +28,26 @@ __all__ = [
     "ensure_frameinfo_compat",
 ]
 
-_UNSUPPORTED_TONEMAP_KEYS: tuple[str, ...] = (
-    "gamut_mode",
-    "tone_mapping_mode",
-    "tone_mapping_crosstalk",
-)
-
 UNSUPPORTED_TONEMAP_MARKERS: tuple[str, ...] = (
     "does not take argument(s) named",
     "does not take argument named",
 )
 
 
-_SEEN_DROPPED_KEYS: set[str] = set()
-
-
-def _describe_missing(keys: Iterable[str]) -> str:
-    return ", ".join(sorted(set(keys)))
-
-
 def ensure_placebo_tonemap_compat() -> None:
-    """Ensure awsmfunc.DynamicTonemap works across vs-placebo builds."""
+    """Reserved for future vs-placebo compatibility hooks."""
 
-    if PlaceboTonemapOpts is None:
-        return
-
-    original = getattr(PlaceboTonemapOpts, "vsplacebo_dict", None)
-
-    if original is None:
-        return
-
-    if getattr(PlaceboTonemapOpts.vsplacebo_dict, "__compat_wrapped__", False):
-        return
-
-    def _compat_vsplacebo_dict(self):  # type: ignore[override]
-        data = original(self)
-
-        dropped = []
-        for key in _UNSUPPORTED_TONEMAP_KEYS:
-            if data.get(key) is None:
-                data.pop(key, None)
-                dropped.append(key)
-
-        if dropped:
-            missing = _describe_missing(dropped)
-            if missing not in _SEEN_DROPPED_KEYS:
-                print(
-                    "vs-placebo Tonemap lacks explicit support for "
-                    f"{missing}; calling without those parameters."
-                )
-                _SEEN_DROPPED_KEYS.add(missing)
-
-        return data
-
-    _compat_vsplacebo_dict.__compat_wrapped__ = True  # type: ignore[attr-defined]
-
-    PlaceboTonemapOpts.vsplacebo_dict = _compat_vsplacebo_dict  # type: ignore[assignment]
+    # The previous implementation attempted to mutate awsmfunc's
+    # ``PlaceboTonemapOpts`` instances so optional tonemapping arguments were
+    # stripped when the installed ``vs-placebo`` plugin did not recognise them.
+    # Unfortunately that meant modern libplacebo builds lost the very
+    # parameters that control tone-mapping behaviour, resulting in HDR clips
+    # passing through untonemapped.  The compatibility strategy is now handled
+    # directly in :func:`modules.utils._tonemap_with_placebo`, where we can
+    # inspect the actual error returned by the plugin and decide whether to
+    # retry via awsmfunc's software fallback instead of silently altering the
+    # request data.
+    return
 
 
 def ensure_frameinfo_compat() -> None:

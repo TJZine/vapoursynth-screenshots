@@ -317,14 +317,15 @@ def _tonemap_with_placebo(clip: vs.VideoNode) -> vs.VideoNode:
         message = str(exc)
 
         if any(marker in message for marker in UNSUPPORTED_TONEMAP_MARKERS):
-            raise RuntimeError(
-                "The installed vs-placebo build does not recognise the "
-                "gamut_mode, tone_mapping_mode or tone_mapping_crosstalk "
-                "parameters required by awsmfunc.DynamicTonemap. Update "
-                "vs-placebo to one of the current libplacebo 6.x releases "
-                "distributed via VSRepo or the upstream project and try "
-                "again."
-            ) from exc
+            print(
+                "vs-placebo Tonemap does not recognise the gamut_mode, "
+                "tone_mapping_mode or tone_mapping_crosstalk parameters "
+                "requested by awsmfunc.DynamicTonemap. Falling back to "
+                "awsmfunc's software tonemapping pipeline. Upgrade to a "
+                "libplacebo 6.x vs-placebo build to regain those advanced "
+                "controls."
+            )
+            return awf.DynamicTonemap(clip=clip, libplacebo=False)
 
         print(
             "DynamicTonemap using vs-placebo failed ("
