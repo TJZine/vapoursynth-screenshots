@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from .compat import (
-    UNSUPPORTED_TONEMAP_MARKERS,
     ensure_frameinfo_compat,
     ensure_placebo_tonemap_compat,
 )
